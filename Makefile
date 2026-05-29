@@ -1,0 +1,224 @@
+# ──────────────────────────────────────────────
+#   RVV SAT solver
+# ──────────────────────────────────────────────
+#   Build:           make
+#   Run on a CNF:    make run CNF=benchmarks/uf20-01.cnf
+#   Run with scalar: make run CNF=... BCP=scalar
+#   Run with RVV:    make run CNF=... BCP=rvv      (default)
+#   Tests:           make test
+#   Debug in spike:  make debug CNF=...
+#   Clean:           make clean
+
+# Toolchain
+CC      := riscv64-unknown-elf-gcc
+OBJDUMP := riscv64-unknown-elf-objdump
+SPIKE   := spike
+PK      := $(RISCV)/riscv64-unknown-elf/bin/pk
+ISA     := rv64gcv
+
+# Flags
+CFLAGS  := -march=$(ISA) -mabi=lp64d -O2 -g -Wall -Wextra -static \
+           -fno-tree-vectorize -Iinclude
+LDFLAGS :=
+
+# Directories
+SRC_DIR    := src
+INC_DIR    := include
+TEST_DIR   := tests
+BUILD_DIR  := build
+OBJ_DIR    := $(BUILD_DIR)/obj_$(BCP)
+BIN 	   := $(BUILD_DIR)/rvv_dpll_$(BCP)
+
+# Source discovery. Solver sources are everything in src/ except main.c
+# and the BCP backends; we want both BCP files compiled but only one
+# linked into the final binary at a time.
+ALL_SRC      := $(wildcard $(SRC_DIR)/*.c)
+COMMON_SRC   := $(filter-out $(SRC_DIR)/main.c $(SRC_DIR)/bcp_scalar.c $(SRC_DIR)/bcp_rvv.c, $(ALL_SRC))
+COMMON_OBJ   := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(COMMON_SRC))
+
+MAIN_OBJ     := $(OBJ_DIR)/main.o
+SCALAR_OBJ   := $(OBJ_DIR)/bcp_scalar.o
+RVV_OBJ      := $(OBJ_DIR)/bcp_rvv.o
+
+# BCP backend selection. Both are always built; one is linked into the
+# binary based on the BCP variable. Default is RVV.
+# BCP ?= rvv
+# until RVV is implemented, default is scalar
+BCP ?= scalar
+ifeq ($(BCP),scalar)
+    BCP_OBJ := $(SCALAR_OBJ)
+    BCP_DEF := -DBCP_SCALAR_DEFAULT
+else ifeq ($(BCP),rvv)
+    BCP_OBJ := $(RVV_OBJ)
+    BCP_DEF := -DBCP_RVV_DEFAULT
+else
+    $(error BCP must be 'scalar' or 'rvv', got '$(BCP)')
+endif
+
+# Default input for `make run` if none specified
+CNF ?= benchmarks/uf20-01.cnf
+
+# ── Targets ───────────────────────────────────
+
+.PHONY: all
+all: $(BIN)
+
+$(BIN): $(MAIN_OBJ) $(COMMON_OBJ) $(BCP_OBJ) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+
+# Compile rule
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
+	$(CC) $(CFLAGS) $(BCP_DEF) -c $< -o $@
+
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
+
+# Run with given CNF
+.PHONY: run
+run: $(BIN)
+	$(SPIKE) --isa=$(ISA) $(PK) $(BIN) $(CNF)
+
+# Interactive debugger
+.PHONY: debug
+debug: $(BIN)
+	$(SPIKE) -d --isa=$(ISA) $(PK) $(BIN) $(CNF)
+
+# Build & run tests. Each test in tests/ is its own little program that
+# links against the common code plus both BCPs (so it can compare them).
+TEST_SRC  := $(wildcard $(TEST_DIR)/*.c)
+TEST_BIN  := $(patsubst $(TEST_DIR)/%.c,$(BUILD_DIR)/test_%,$(TEST_SRC))
+
+# Default CNF for the parse test
+TEST_PARSE_CNF ?= benchmarks/uf20-01.cnf
+
+$(BUILD_DIR)/test_%: $(TEST_DIR)/%.c $(COMMON_OBJ) $(BCP_OBJ) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+
+.PHONY: test
+test: test-unit-bcp test-parse test-bcp-step test-bcp-run test-rewind test-solve
+
+.PHONY: test-unit-bcp
+test-bcp: $(BUILD_DIR)/test_bcp
+	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/test_bcp
+
+.PHONY: test-parse
+test-parse: $(BUILD_DIR)/test_parse
+	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/test_parse $(TEST_PARSE_CNF)
+
+.PHONY: test-bcp-step
+test-bcp-step: $(BUILD_DIR)/test_bcp_step
+	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/test_bcp_step
+
+.PHONY: test-bcp-run
+test-bcp-run: $(BUILD_DIR)/test_bcp_run
+	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/test_bcp_run
+
+.PHONY: test-rewind
+test-rewind: $(BUILD_DIR)/test_rewind
+	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/test_rewind
+
+.PHONY: test-solve
+test-solve: $(BUILD_DIR)/test_solve
+	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/test_solve
+
+# test: $(TEST_BIN)
+# 	@for t in $(TEST_BIN); do \
+# 		echo "===== $$t ====="; \
+# 		$(SPIKE) --isa=$(ISA) $(PK) $$t || exit 1; \
+# 	done
+
+# ── Assembly / Disassembly Inspection ───────────────────────
+
+# Generate compiler-produced assembly (.s) for every src/*.c file
+ASM_SRC := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/asm_%.s,$(ALL_SRC))
+
+$(BUILD_DIR)/asm_%.s: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(BCP_DEF) -S -fverbose-asm $< -o $@
+
+.PHONY: asm
+asm: $(ASM_SRC)
+	@echo "Assembly files written to $(BUILD_DIR)/asm_*.s"
+
+# Generate assembly for test files
+TEST_ASM := $(patsubst $(TEST_DIR)/%.c,$(BUILD_DIR)/asm_test_%.s,$(TEST_SRC))
+
+$(BUILD_DIR)/asm_test_%.s: $(TEST_DIR)/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(BCP_DEF) -S -fverbose-asm $< -o $@
+
+.PHONY: testasm
+testasm: $(TEST_ASM)
+	@echo "Test assembly files written to $(BUILD_DIR)/asm_test_*.s"
+
+# Generate disassembly for every object file
+OBJ_DIS := $(patsubst $(OBJ_DIR)/%.o,$(BUILD_DIR)/%.obj.dis,\
+           $(COMMON_OBJ) $(MAIN_OBJ) $(SCALAR_OBJ) $(RVV_OBJ))
+
+$(BUILD_DIR)/%.obj.dis: $(OBJ_DIR)/%.o | $(BUILD_DIR)
+	$(OBJDUMP) -d -S --no-show-raw-insn $< > $@
+
+.PHONY: objdis
+objdis: $(OBJ_DIS)
+	@echo "Object disassembly files written to $(BUILD_DIR)/*.obj.dis"
+
+# Generate disassembly for every test binary
+TEST_DIS := $(patsubst $(BUILD_DIR)/test_%,$(BUILD_DIR)/test_%.dis,$(TEST_BIN))
+
+$(BUILD_DIR)/test_%.dis: $(BUILD_DIR)/test_% | $(BUILD_DIR)
+	$(OBJDUMP) -d -S --no-show-raw-insn $< > $@
+
+.PHONY: testdis
+testdis: $(TEST_DIS)
+	@echo "Test disassembly files written to $(BUILD_DIR)/test_*.dis"
+
+# Disassembly of final binary, with source interleaving
+.PHONY: dis
+dis: $(BIN)
+	$(OBJDUMP) -d -S --no-show-raw-insn $(BIN) > $(BUILD_DIR)/rvv_dpll.dis
+	@echo "Disassembly written to $(BUILD_DIR)/rvv_dpll.dis"
+
+# Convenience: rebuild with the other backend
+.PHONY: scalar
+scalar:
+	$(MAKE) BCP=scalar
+
+.PHONY: rvv
+rvv:
+	$(MAKE) BCP=rvv
+
+# Quick sanity check on the toolchain
+.PHONY: check-env
+check-env:
+	@echo "RISCV    = $(RISCV)"
+	@echo "CC       = $(shell which $(CC) 2>/dev/null || echo NOT FOUND)"
+	@echo "SPIKE    = $(shell which $(SPIKE) 2>/dev/null || echo NOT FOUND)"
+	@echo "PK       = $(PK) $(shell test -f $(PK) && echo [ok] || echo [MISSING])"
+	@echo "BCP      = $(BCP) (set with: make BCP=scalar)"
+	@echo "CNF      = $(CNF) (set with: make run CNF=...)"
+
+.PHONY: compare
+compare:
+	$(MAKE) BCP=scalar
+	$(MAKE) BCP=rvv
+	@echo "=== scalar ==="
+	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/rvv_dpll_scalar $(CNF)
+	@echo "=== rvv ==="
+	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/rvv_dpll_rvv $(CNF)
+
+.PHONY: clean
+clean:
+	rm -rf $(BUILD_DIR)
+
+.PHONY: help
+help:
+	@echo "Targets:"
+	@echo "  make                   - build with default BCP backend (rvv)"
+	@echo "  make BCP=scalar        - build with scalar BCP backend"
+	@echo "  make run CNF=...       - run on the given CNF file"
+	@echo "  make debug CNF=...     - run in spike interactive debugger"
+	@echo "  make test              - build and run all tests"
+	@echo "  make dis               - dump disassembly to build/rvv_dpll.dis"
+	@echo "  make check-env         - verify toolchain is set up"
+	@echo "  make clean             - remove build directory"
