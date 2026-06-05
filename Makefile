@@ -20,6 +20,7 @@ ISA     := rv64gcv
 CFLAGS  := -march=$(ISA) -mabi=lp64d -O2 -g -Wall -Wextra -static \
            -fno-tree-vectorize -Iinclude
 LDFLAGS :=
+SPIKEFLAGS := --isa=$(ISA)_zicntr --priv=msu
 
 # Directories
 SRC_DIR    := src
@@ -79,12 +80,12 @@ $(OBJ_DIR):
 # Run with given CNF
 .PHONY: run
 run: $(BIN)
-	$(SPIKE) --isa=$(ISA) $(PK) $(BIN) $(CNF)
+	$(SPIKE) $(SPIKEFLAGS) $(PK) $(BIN) $(CNF)
 
 # Interactive debugger
 .PHONY: debug
 debug: $(BIN)
-	$(SPIKE) -d --isa=$(ISA) $(PK) $(BIN) $(CNF)
+	$(SPIKE) -d $(SPIKEFLAGS) $(PK) $(BIN) $(CNF)
 
 # Build & run tests. Each test in tests/ is its own little program that
 # links against the common code plus both BCPs (so it can compare them).
@@ -102,32 +103,32 @@ test: test-unit-bcp test-parse test-bcp-step test-bcp-run test-rewind test-solve
 
 .PHONY: test-unit-bcp
 test-bcp: $(BUILD_DIR)/test_bcp
-	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/test_bcp
+	$(SPIKE) $(SPIKEFLAGS) $(PK) $(BUILD_DIR)/test_bcp
 
 .PHONY: test-parse
 test-parse: $(BUILD_DIR)/test_parse
-	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/test_parse $(TEST_PARSE_CNF)
+	$(SPIKE) $(SPIKEFLAGS) $(PK) $(BUILD_DIR)/test_parse $(TEST_PARSE_CNF)
 
 .PHONY: test-bcp-step
 test-bcp-step: $(BUILD_DIR)/test_bcp_step
-	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/test_bcp_step
+	$(SPIKE) $(SPIKEFLAGS) $(PK) $(BUILD_DIR)/test_bcp_step
 
 .PHONY: test-bcp-run
 test-bcp-run: $(BUILD_DIR)/test_bcp_run
-	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/test_bcp_run
+	$(SPIKE) $(SPIKEFLAGS) $(PK) $(BUILD_DIR)/test_bcp_run
 
 .PHONY: test-rewind
 test-rewind: $(BUILD_DIR)/test_rewind
-	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/test_rewind
+	$(SPIKE) $(SPIKEFLAGS) $(PK) $(BUILD_DIR)/test_rewind
 
 .PHONY: test-solve
 test-solve: $(BUILD_DIR)/test_solve
-	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/test_solve
+	$(SPIKE) $(SPIKEFLAGS) $(PK) $(BUILD_DIR)/test_solve
 
 # test: $(TEST_BIN)
 # 	@for t in $(TEST_BIN); do \
 # 		echo "===== $$t ====="; \
-# 		$(SPIKE) --isa=$(ISA) $(PK) $$t || exit 1; \
+# 		$(SPIKE) $(SPIKEFLAGS) $(PK) $$t || exit 1; \
 # 	done
 
 # ── Assembly / Disassembly Inspection ───────────────────────
@@ -203,9 +204,9 @@ compare:
 	$(MAKE) BCP=scalar
 	$(MAKE) BCP=rvv
 	@echo "=== scalar ==="
-	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/rvv_dpll_scalar $(CNF)
+	$(SPIKE) $(SPIKEFLAGS) $(PK) $(BUILD_DIR)/rvv_dpll_scalar $(CNF)
 	@echo "=== rvv ==="
-	$(SPIKE) --isa=$(ISA) $(PK) $(BUILD_DIR)/rvv_dpll_rvv $(CNF)
+	$(SPIKE) $(SPIKEFLAGS) $(PK) $(BUILD_DIR)/rvv_dpll_rvv $(CNF)
 
 .PHONY: clean
 clean:
