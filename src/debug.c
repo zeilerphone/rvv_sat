@@ -180,11 +180,11 @@ void preassign(Formula *f, Assignment *a, bcp_queue *q, Trail *t,
 void snapshot_take(state_snapshot *s, const Formula *f, const Assignment *a) {
     s->num_vars = f->num_vars;
     s->num_clauses = f->num_clauses;
-    s->values         = malloc((f->num_vars + 1) * sizeof(int8_t));
+    s->values         = malloc((f->num_vars + 1) * sizeof(int32_t));
     s->lit_status     = malloc(2 * f->num_vars * sizeof(uint8_t));
     s->num_satisfied  = malloc(f->num_clauses * sizeof(int32_t));
     s->num_unassigned = malloc(f->num_clauses * sizeof(int32_t));
-    memcpy(s->values,         a->values,         (f->num_vars + 1) * sizeof(int8_t));
+    memcpy(s->values,         a->values,         (f->num_vars + 1) * sizeof(int32_t));
     memcpy(s->lit_status,     a->lit_status,     2 * f->num_vars * sizeof(uint8_t));
     memcpy(s->num_satisfied,  a->num_satisfied,  f->num_clauses * sizeof(int32_t));
     memcpy(s->num_unassigned, a->num_unassigned, f->num_clauses * sizeof(int32_t));
@@ -240,7 +240,7 @@ int verify_sat(const Formula *f, const Assignment *a) {
         for (int32_t k = start; k < end; k++) {
             int32_t lit = f->lit_col[k];
             int32_t v = lit_var(lit);
-            int8_t  required = lit_is_negated(lit) ? VAR_FALSE : VAR_TRUE;
+            int32_t required = lit_is_negated(lit) ? VAR_FALSE : VAR_TRUE;
             if (a->values[v] == required) { satisfied = 1; break; }
         }
         if (!satisfied) {

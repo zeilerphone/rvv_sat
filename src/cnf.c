@@ -8,7 +8,7 @@
 // ===== Allocation lifecycle ===================
 void assignment_init(Assignment *a, size_t num_vars, size_t num_clauses) {
     // zero initialize values : VAR_UNSET = 0
-    a->values         = calloc(num_vars + 1, sizeof(int8_t));
+    a->values         = calloc(num_vars + 1, sizeof(int32_t));
     // different representation of above 
     // - helpful for interfacing with Formula
     a->lit_status     = malloc(2 * num_vars * sizeof(uint8_t));

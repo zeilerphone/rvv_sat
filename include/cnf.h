@@ -44,7 +44,7 @@ typedef struct {
 } Formula;
 
 typedef struct {
-    int8_t  *values;        // [num_vars+1], 1-indexed
+    int32_t *values;        // [num_vars+1], 1-indexed
                             // UNSET=0, TRUE=1, FALSE=-1
     uint8_t *lit_status;    // [2*num_vars], internal lit indexed
                             // 0x00 = falsified, 0x01 = satisfied, 0x10 = unset
@@ -104,7 +104,7 @@ static inline void clause_lit_range(const Formula *f, int32_t clause,
 
 // Helper to update assignment. 
 // -- unused to avoid recomputing polarity. easier to do in bcp_prop_one
-static inline void assign_var(Assignment *a, int32_t v, int8_t polarity) {
+static inline void assign_var(Assignment *a, int32_t v, int32_t polarity) {
     a->values[v] = polarity;
     int32_t pos_lit = encode_lit(v);
     int32_t neg_lit = pos_lit + 1;
