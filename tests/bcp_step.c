@@ -27,8 +27,8 @@ static int test_simple_satisfy(void) {
     int ok = 1;
     if (s != BCP_STEP_OK) { printf("    FAIL: status not OK\n"); ok = 0; }
     if (a.values[1] != 1) { printf("    FAIL: x1 not assigned TRUE\n"); ok = 0; }
-    if (a.num_satisfied[0] != 1) { printf("    FAIL: C0 sat count != 1\n"); ok = 0; }
-    if (a.num_unassigned[0] != 1) { printf("    FAIL: C0 unassigned count != 1\n"); ok = 0; }
+    if (clause_sat(a.sat_una[0]) != 1) { printf("    FAIL: C0 sat count != 1\n"); ok = 0; }
+    if (clause_una(a.sat_una[0]) != 1) { printf("    FAIL: C0 unassigned count != 1\n"); ok = 0; }
     if (q.tail != q.head) { printf("    FAIL: queue should be empty\n"); ok = 0; }
 
     teardown_state(&f, &a, &q, &t);
@@ -54,8 +54,8 @@ static int test_falsify_only(void) {
 
     int ok = 1;
     if (s != BCP_STEP_OK) { printf("    FAIL: status not OK\n"); ok = 0; }
-    if (a.num_satisfied[0] != 0) { printf("    FAIL: C0 sat count != 0\n"); ok = 0; }
-    if (a.num_unassigned[0] != 1) { printf("    FAIL: C0 unassigned count != 1\n"); ok = 0; }
+    if (clause_sat(a.sat_una[0]) != 0) { printf("    FAIL: C0 sat count != 0\n"); ok = 0; }
+    if (clause_una(a.sat_una[0]) != 1) { printf("    FAIL: C0 unassigned count != 1\n"); ok = 0; }
     if (q.tail - q.head != 1) {
         printf("    FAIL: expected 1 unit in queue, got %zu\n", q.tail - q.head);
         ok = 0;
@@ -107,8 +107,8 @@ static int test_already_assigned_match(void) {
 
     // Manually assign x1=T first
     bcp_prop_one(&f, &a, &q, &t, encode_lit(1));
-    int32_t pre_sat = a.num_satisfied[0];
-    int32_t pre_unassigned = a.num_unassigned[0];
+    int32_t pre_sat = clause_sat(a.sat_una[0]);
+    int32_t pre_unassigned = clause_una(a.sat_una[0]);
 
     // Reset queue, then re-apply same literal — should be a no-op.
     bcp_queue_reset(&q);
@@ -117,13 +117,13 @@ static int test_already_assigned_match(void) {
 
     int ok = 1;
     if (s != BCP_STEP_OK) { printf("    FAIL: status not OK\n"); ok = 0; }
-    if (a.num_satisfied[0] != pre_sat) {
-        printf("    FAIL: sat count changed (%d -> %d)\n", pre_sat, a.num_satisfied[0]);
+    if (clause_sat(a.sat_una[0]) != pre_sat) {
+        printf("    FAIL: sat count changed (%d -> %d)\n", pre_sat, clause_sat(a.sat_una[0]));
         ok = 0;
     }
-    if (a.num_unassigned[0] != pre_unassigned) {
+    if (clause_una(a.sat_una[0]) != pre_unassigned) {
         printf("    FAIL: unassigned count changed (%d -> %d)\n",
-               pre_unassigned, a.num_unassigned[0]);
+               pre_unassigned, clause_una(a.sat_una[0]));
         ok = 0;
     }
     if (q.tail != q.head) { printf("    FAIL: queue should be empty\n"); ok = 0; }
@@ -216,21 +216,21 @@ static int test_no_change_on_unrelated_clause(void) {
     Trail t;
     setup_state(&f, &a, &q, &t, clauses, lengths, 3, 2);
 
-    int32_t c1_sat_before = a.num_satisfied[1];
-    int32_t c1_un_before = a.num_unassigned[1];
+    int32_t c1_sat_before = clause_sat(a.sat_una[1]);
+    int32_t c1_un_before = clause_una(a.sat_una[1]);
 
     bcp_prop_one(&f, &a, &q, &t, encode_lit(1));
     print_state(&f, &a, &q, &t);
 
     int ok = 1;
-    if (a.num_satisfied[1] != c1_sat_before) {
+    if (clause_sat(a.sat_una[1]) != c1_sat_before) {
         printf("    FAIL: C1 sat changed (%d -> %d)\n",
-               c1_sat_before, a.num_satisfied[1]);
+               c1_sat_before, clause_sat(a.sat_una[1]));
         ok = 0;
     }
-    if (a.num_unassigned[1] != c1_un_before) {
+    if (clause_una(a.sat_una[1]) != c1_un_before) {
         printf("    FAIL: C1 unassigned changed (%d -> %d)\n",
-               c1_un_before, a.num_unassigned[1]);
+               c1_un_before, clause_una(a.sat_una[1]));
         ok = 0;
     }
 
@@ -335,24 +335,24 @@ static int test_mixed_satisfy_and_unit(void) {
     // Counter spot-checks for the satisfied clauses:
     //   C0 (x1, x2): x1 became true (sat++); x2 still unassigned. Expect (1, 1).
     //   C2 (x1, -x4, x5): x1 became true. -x4 and x5 unassigned. Expect (1, 2).
-    if (a.num_satisfied[0] != 1 || a.num_unassigned[0] != 1) {
+    if (clause_sat(a.sat_una[0]) != 1 || clause_una(a.sat_una[0]) != 1) {
         printf("    FAIL: C0 expected (1,1), got (%d,%d)\n",
-               a.num_satisfied[0], a.num_unassigned[0]); ok = 0;
+               clause_sat(a.sat_una[0]), clause_una(a.sat_una[0])); ok = 0;
     }
-    if (a.num_satisfied[2] != 1 || a.num_unassigned[2] != 2) {
+    if (clause_sat(a.sat_una[2]) != 1 || clause_una(a.sat_una[2]) != 2) {
         printf("    FAIL: C2 expected (1,2), got (%d,%d)\n",
-               a.num_satisfied[2], a.num_unassigned[2]); ok = 0;
+               clause_sat(a.sat_una[2]), clause_una(a.sat_una[2])); ok = 0;
     }
     // Falsification clauses:
     //   C1 (-x1, x3): -x1 became false. x3 still unassigned. Expect (0, 1).
     //   C3 (-x1, -x5): -x1 became false. -x5 still unassigned. Expect (0, 1).
-    if (a.num_satisfied[1] != 0 || a.num_unassigned[1] != 1) {
+    if (clause_sat(a.sat_una[1]) != 0 || clause_una(a.sat_una[1]) != 1) {
         printf("    FAIL: C1 expected (0,1), got (%d,%d)\n",
-               a.num_satisfied[1], a.num_unassigned[1]); ok = 0;
+               clause_sat(a.sat_una[1]), clause_una(a.sat_una[1])); ok = 0;
     }
-    if (a.num_satisfied[3] != 0 || a.num_unassigned[3] != 1) {
+    if (clause_sat(a.sat_una[3]) != 0 || clause_una(a.sat_una[3]) != 1) {
         printf("    FAIL: C3 expected (0,1), got (%d,%d)\n",
-               a.num_satisfied[3], a.num_unassigned[3]); ok = 0;
+               clause_sat(a.sat_una[3]), clause_una(a.sat_una[3])); ok = 0;
     }
 
     teardown_state(&f, &a, &q, &t);
@@ -388,9 +388,9 @@ static int test_unit_with_partially_assigned(void) {
     // -x1 is unassigned, x2 is false (literal +x2 false → contributes 0),
     // x3 is false (+x3 false), x4 unassigned. So num_satisfied=0,
     // num_unassigned=2 (the -x1 and x4 literals).
-    if (a.num_satisfied[0] != 0 || a.num_unassigned[0] != 2) {
+    if (clause_sat(a.sat_una[0]) != 0 || clause_una(a.sat_una[0]) != 2) {
         printf("    setup FAIL: expected C0 (0,2), got (%d,%d)\n",
-               a.num_satisfied[0], a.num_unassigned[0]);
+               clause_sat(a.sat_una[0]), clause_una(a.sat_una[0]));
     }
 
     // Reset queue, then propagate x1=T. This falsifies -x1, leaving x4
@@ -513,11 +513,11 @@ static int test_cascading_propagation(void) {
         {1, 2}, {0, 1}, {1, 2}, {0, 2}, {0, 1}, {0, 3}, {0, 3}
     };
     for (size_t c = 0; c < f.num_clauses; c++) {
-        if (a.num_satisfied[c] != expected[c].sat ||
-            a.num_unassigned[c] != expected[c].unassigned) {
+        if (clause_sat(a.sat_una[c]) != expected[c].sat ||
+            clause_una(a.sat_una[c]) != expected[c].unassigned) {
             printf("    FAIL: C%zu expected (%d,%d), got (%d,%d)\n",
                    c, expected[c].sat, expected[c].unassigned,
-                   a.num_satisfied[c], a.num_unassigned[c]);
+                   clause_sat(a.sat_una[c]), clause_una(a.sat_una[c]));
             ok = 0;
         }
     }
@@ -646,11 +646,11 @@ static int test_dense_with_partial_setup(void) {
         {2, 2},   // C5
     };
     for (size_t c = 0; c < f.num_clauses; c++) {
-        if (a.num_satisfied[c] != expected[c].sat ||
-            a.num_unassigned[c] != expected[c].unassigned) {
+        if (clause_sat(a.sat_una[c]) != expected[c].sat ||
+            clause_una(a.sat_una[c]) != expected[c].unassigned) {
             printf("    FAIL: C%zu expected (%d,%d), got (%d,%d)\n",
                    c, expected[c].sat, expected[c].unassigned,
-                   a.num_satisfied[c], a.num_unassigned[c]);
+                   clause_sat(a.sat_una[c]), clause_una(a.sat_una[c]));
             ok = 0;
         }
     }

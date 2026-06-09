@@ -49,10 +49,22 @@ typedef struct {
     uint8_t *lit_status;    // [2*num_vars], internal lit indexed
                             // 0x00 = falsified, 0x01 = satisfied, 0x10 = unset
 
-    // Per-clause state (mutable, walked back on backtrack)
-    int32_t *num_satisfied;   // [num_clauses]
-    int32_t *num_unassigned;  // [num_clauses]
+    // Per-clause state packed into one int32_t per clause:
+    //   bits [31:16]: num_satisfied
+    //   bits [15: 0]: num_unassigned
+    int32_t *sat_una;  // [num_clauses]
 } Assignment;
+
+// Accessors for the packed sat/una field.
+static inline int32_t clause_sat(int32_t su) { return su >> 16; }
+static inline int32_t clause_una(int32_t su) { return su & 0xFFFF; }
+static inline int32_t pack_sat_una(int32_t sat, int32_t una) {
+    return (sat << 16) | (una & 0xFFFF);
+}
+// Combined update constants (avoids two separate RMW ops on the same element):
+//   sat++, una--  →  += SAT_INC_UNA_DEC  (= +65535)
+//   sat--, una++  →  -= SAT_INC_UNA_DEC  (= -65535)
+#define SAT_INC_UNA_DEC  0xFFFF
 
 // Encode a DIMACS literal (signed 1-based variable) into a 0-based literal
 // index used by lit_row_off. We use:

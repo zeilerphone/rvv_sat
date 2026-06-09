@@ -126,7 +126,7 @@ void print_state(const Formula *f, const Assignment *a, const bcp_queue *q, cons
     }
     printf("\n    counters: ");
     for (size_t c = 0; c < f->num_clauses; c++) {
-        printf("C%zu(s=%d,u=%d) ", c, a->num_satisfied[c], a->num_unassigned[c]);
+        printf("C%zu(s=%d,u=%d) ", c, clause_sat(a->sat_una[c]), clause_una(a->sat_una[c]));
     }
     printf("\n    queue: [");
     for (size_t i = q->head; i < q->tail; i++) {
@@ -182,19 +182,16 @@ void snapshot_take(state_snapshot *s, const Formula *f, const Assignment *a) {
     s->num_clauses = f->num_clauses;
     s->values         = malloc((f->num_vars + 1) * sizeof(int32_t));
     s->lit_status     = malloc(2 * f->num_vars * sizeof(uint8_t));
-    s->num_satisfied  = malloc(f->num_clauses * sizeof(int32_t));
-    s->num_unassigned = malloc(f->num_clauses * sizeof(int32_t));
-    memcpy(s->values,         a->values,         (f->num_vars + 1) * sizeof(int32_t));
-    memcpy(s->lit_status,     a->lit_status,     2 * f->num_vars * sizeof(uint8_t));
-    memcpy(s->num_satisfied,  a->num_satisfied,  f->num_clauses * sizeof(int32_t));
-    memcpy(s->num_unassigned, a->num_unassigned, f->num_clauses * sizeof(int32_t));
+    s->sat_una = malloc(f->num_clauses * sizeof(int32_t));
+    memcpy(s->values,     a->values,     (f->num_vars + 1) * sizeof(int32_t));
+    memcpy(s->lit_status, a->lit_status, 2 * f->num_vars * sizeof(uint8_t));
+    memcpy(s->sat_una,    a->sat_una,    f->num_clauses * sizeof(int32_t));
 }
 
 void snapshot_free(state_snapshot *s) {
     free(s->values);
     free(s->lit_status);
-    free(s->num_satisfied);
-    free(s->num_unassigned);
+    free(s->sat_una);
 }
 
 // Returns 1 if the current assignment matches the snapshot exactly.
@@ -216,14 +213,11 @@ int snapshot_compare(const state_snapshot *s, const Assignment *a) {
         }
     }
     for (size_t c = 0; c < s->num_clauses; c++) {
-        if (a->num_satisfied[c] != s->num_satisfied[c]) {
-            printf("    DIFF: num_satisfied[%zu]: snapshot=%d, current=%d\n",
-                   c, s->num_satisfied[c], a->num_satisfied[c]);
-            ok = 0;
-        }
-        if (a->num_unassigned[c] != s->num_unassigned[c]) {
-            printf("    DIFF: num_unassigned[%zu]: snapshot=%d, current=%d\n",
-                   c, s->num_unassigned[c], a->num_unassigned[c]);
+        if (a->sat_una[c] != s->sat_una[c]) {
+            printf("    DIFF: C%zu: snapshot=(s=%d,u=%d), current=(s=%d,u=%d)\n",
+                   c,
+                   clause_sat(s->sat_una[c]), clause_una(s->sat_una[c]),
+                   clause_sat(a->sat_una[c]), clause_una(a->sat_una[c]));
             ok = 0;
         }
     }

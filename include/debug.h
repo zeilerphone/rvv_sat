@@ -40,8 +40,7 @@ void preassign(Formula *f, Assignment *a, bcp_queue *q, Trail *t,
 typedef struct {
     int32_t  *values;
     uint8_t  *lit_status;
-    int32_t  *num_satisfied;
-    int32_t  *num_unassigned;
+    int32_t  *sat_una;
     size_t    num_vars;
     size_t    num_clauses;
 } state_snapshot;

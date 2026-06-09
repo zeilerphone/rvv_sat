@@ -14,40 +14,37 @@ uint64_t g_kloop_false  = 0;
 uint64_t g_kenter_false = 0;  // k-loop entries (once per outer iter entering it)
 
 void bcp_init(const Formula *f, Assignment *a){
-    size_t n = f->num_clauses;
-    int32_t *n_satisfied = a->num_satisfied;
-    int32_t *n_unassigned = a->num_unassigned;
+    size_t n           = f->num_clauses;
+    int32_t *su        = a->sat_una;
     int32_t *c_row_off = f->clause_row_off;
-    for(size_t vl; n > 0; n -= vl, n_satisfied += vl, n_unassigned += vl, c_row_off += vl){
+    for(size_t vl; n > 0; n -= vl, su += vl, c_row_off += vl){
         vl = __riscv_vsetvl_e32m2(n);
-        // fill up vector for num_satisfied with zeroes
-        __riscv_vse32_v_i32m2(n_satisfied, __riscv_vmv_v_x_i32m2(0, vl), vl);
-        // a->num_unassigned[i] = f->clause_row_off[i + 1] - f->clause_row_off[i];
-        vint32m2_t vn_una = __riscv_vsub_vv_i32m2(
-            __riscv_vle32_v_i32m2(c_row_off + 1, vl), 
-            __riscv_vle32_v_i32m2(c_row_off    , vl), vl);
-        __riscv_vse32_v_i32m2(n_unassigned, vn_una, vl);
+        // pack_sat_una(0, len) == len for len < 65536
+        vint32m2_t vlen = __riscv_vsub_vv_i32m2(
+            __riscv_vle32_v_i32m2(c_row_off + 1, vl),
+            __riscv_vle32_v_i32m2(c_row_off,     vl), vl);
+        __riscv_vse32_v_i32m2(su, vlen, vl);
     }
 }
 
 enum bcp_status bcp_run(const Formula *f, Assignment *a, bcp_queue *q, Trail *t){
     bcp_queue_reset(q);
 
-    size_t n = f->num_clauses;
-    int32_t *n_satisfied = a->num_satisfied;
-    int32_t *n_unassigned = a->num_unassigned;
-    int32_t *c_dense= f->clause_dense;
+    size_t n       = f->num_clauses;
+    int32_t *su    = a->sat_una;
+    int32_t *c_dense = f->clause_dense;
 
     size_t max_len = f->max_clause_len;
 
     // scan (no shortcuts to skip clauses - have to scan all)
     int32_t all_sat = 1;
-    for(size_t vl; n > 0; n -= vl, n_satisfied += vl, n_unassigned += vl, c_dense += vl * max_len){
+    for(size_t vl; n > 0; n -= vl, su += vl, c_dense += vl * max_len){
         vl = __riscv_vsetvl_e32m2(n);
 
-        // load num_satisifed, num_unassigned
-        vint32m2_t vn_sat = __riscv_vle32_v_i32m2(n_satisfied, vl);
-        vint32m2_t vn_una = __riscv_vle32_v_i32m2(n_unassigned, vl);
+        // load sat_una, unpack sat and una
+        vint32m2_t vsu    = __riscv_vle32_v_i32m2(su, vl);
+        vint32m2_t vn_sat = __riscv_vsra_vx_i32m2(vsu, 16,     vl);
+        vint32m2_t vn_una = __riscv_vand_vx_i32m2(vsu, 0xFFFF, vl);
 
         // build 3 masks - sat_mask, conflict_mask, unit_mask
         // sat_mask = (num_satisfied != 0)
@@ -55,7 +52,7 @@ enum bcp_status bcp_run(const Formula *f, Assignment *a, bcp_queue *q, Trail *t)
         if(__riscv_vcpop_m_b16(sat_mask, vl) == vl){
             continue; // if all clauses checked are satisified, continue
         }
-        // set all_sat to 0 if not lanes for sat_mask are true
+        // set all_sat to 0 if not all lanes for sat_mask are true
         all_sat = 0;
         // conflict_mask = (num_unassigned == 0) && !sat_mask
         vbool16_t conflict_mask = __riscv_vmandn_mm_b16(
@@ -130,7 +127,7 @@ enum bcp_status bcp_drain(const Formula *f, Assignment *a, bcp_queue *q, Trail *
     }
 
     for(size_t i = 0; i < f->num_clauses; i++){
-        if(a->num_satisfied[i] == 0) return BCP_UNDETERMINED;
+        if(clause_sat(a->sat_una[i]) == 0) return BCP_UNDETERMINED;
     }
     return BCP_SAT;
 }
@@ -142,8 +139,7 @@ enum bcp_step_status bcp_prop_one(const Formula *f, Assignment *a, bcp_queue *q,
     // load reused data once
     size_t max_len = f->max_clause_len;
     // restricted base assignment pointers to save a few cycles
-    int32_t *restrict ns = a->num_satisfied;
-    int32_t *restrict nu = a->num_unassigned;
+    int32_t *restrict su   = a->sat_una;
     int32_t *restrict vals = a->values;
 
     g_prop_calls++;
@@ -179,12 +175,12 @@ enum bcp_step_status bcp_prop_one(const Formula *f, Assignment *a, bcp_queue *q,
         vuint32m2_t vclause = __riscv_vsll_vx_u32m2(
             __riscv_vle32_v_u32m2((const uint32_t *)(f->clause_col + clause_idx), vl), 
             clause_shift, vl);
-        vint32m2_t vn_sat = __riscv_vluxei32_v_i32m2(ns, vclause, vl);
-        vint32m2_t vn_una = __riscv_vluxei32_v_i32m2(nu, vclause, vl);
-        vn_sat = __riscv_vadd_vx_i32m2(vn_sat, 1, vl);
-        vn_una = __riscv_vsub_vx_i32m2(vn_una, 1, vl);
-        __riscv_vsuxei32_v_i32m2(ns, vclause, vn_sat, vl);
-        __riscv_vsuxei32_v_i32m2(nu, vclause, vn_una, vl);
+        vint32m2_t vsu = __riscv_vluxei32_v_i32m2(su, vclause, vl);
+        vsu = __riscv_vadd_vx_i32m2(vsu, SAT_INC_UNA_DEC, vl);  // sat++, una--
+        __riscv_vsuxei32_v_i32m2(su, vclause, vsu, vl);
+
+        vint32m2_t vn_sat = __riscv_vsra_vx_i32m2(vsu, 16,     vl);
+        vint32m2_t vn_una = __riscv_vand_vx_i32m2(vsu, 0xFFFF, vl);
 
         // sat_mask = (num_satisfied != 0)
         vbool16_t sat_mask = __riscv_vmsne_vx_i32m2_b16(vn_sat, 0, vl);
@@ -244,12 +240,12 @@ enum bcp_step_status bcp_prop_one(const Formula *f, Assignment *a, bcp_queue *q,
         g_outer_false++;
         vl = __riscv_vsetvl_e32m2(n);
         vuint32m2_t vclause = __riscv_vsll_vx_u32m2(__riscv_vle32_v_u32m2((const uint32_t *)(f->clause_col + clause_idx), vl), clause_shift, vl);
-        vint32m2_t vn_sat = __riscv_vluxei32_v_i32m2(ns, vclause, vl);
-        vint32m2_t vn_una = __riscv_vluxei32_v_i32m2(nu, vclause, vl);
-        // vn_sat = __riscv_vadd_vx_i32m2(vn_sat, 1, vl);
-        vn_una = __riscv_vsub_vx_i32m2(vn_una, 1, vl);
-        // __riscv_vsuxei32_v_i32m2(ns,  vclause, vn_sat, vl);
-        __riscv_vsuxei32_v_i32m2(nu, vclause, vn_una, vl);
+        vint32m2_t vsu = __riscv_vluxei32_v_i32m2(su, vclause, vl);
+        vsu = __riscv_vsub_vx_i32m2(vsu, 1, vl);  // una--
+        __riscv_vsuxei32_v_i32m2(su, vclause, vsu, vl);
+
+        vint32m2_t vn_sat = __riscv_vsra_vx_i32m2(vsu, 16,     vl);
+        vint32m2_t vn_una = __riscv_vand_vx_i32m2(vsu, 0xFFFF, vl);
 
         vbool16_t sat_mask = __riscv_vmsne_vx_i32m2_b16(vn_sat, 0, vl);
         vbool16_t unit_mask = __riscv_vmandn_mm_b16(__riscv_vmseq_vx_i32m2_b16(vn_una, 1, vl), sat_mask, vl);
@@ -308,12 +304,9 @@ void bcp_rwnd_one(const Formula *f, Assignment *a, int32_t var){
     for(size_t vl; n > 0; n -= vl, clause_idx += vl){
         vl = __riscv_vsetvl_e32m2(n);
         vuint32m2_t vclause = __riscv_vsll_vx_u32m2(__riscv_vle32_v_u32m2((const uint32_t *)(f->clause_col + clause_idx), vl), clause_shift, vl);
-        vint32m2_t vn_sat = __riscv_vluxei32_v_i32m2(a->num_satisfied, vclause, vl);
-        vint32m2_t vn_una = __riscv_vluxei32_v_i32m2(a->num_unassigned, vclause, vl);
-        vn_sat = __riscv_vsub_vx_i32m2(vn_sat, 1, vl);
-        vn_una = __riscv_vadd_vx_i32m2(vn_una, 1, vl);
-        __riscv_vsuxei32_v_i32m2(a->num_satisfied,  vclause, vn_sat, vl);
-        __riscv_vsuxei32_v_i32m2(a->num_unassigned, vclause, vn_una, vl);
+        vint32m2_t vsu = __riscv_vluxei32_v_i32m2(a->sat_una, vclause, vl);
+        vsu = __riscv_vsub_vx_i32m2(vsu, SAT_INC_UNA_DEC, vl);  // sat--, una++
+        __riscv_vsuxei32_v_i32m2(a->sat_una, vclause, vsu, vl);
     }
     // clauses with literal uns_lit
     clause_idx = f->lit_row_off[uns_lit];
@@ -321,8 +314,8 @@ void bcp_rwnd_one(const Formula *f, Assignment *a, int32_t var){
     for(size_t vl; n > 0; n -= vl, clause_idx += vl){
         vl = __riscv_vsetvl_e32m2(n);
         vuint32m2_t vclause = __riscv_vsll_vx_u32m2(__riscv_vle32_v_u32m2((const uint32_t *)(f->clause_col + clause_idx), vl), clause_shift, vl);
-        vint32m2_t vn_una = __riscv_vluxei32_v_i32m2(a->num_unassigned, vclause, vl);
-        vn_una = __riscv_vadd_vx_i32m2(vn_una, 1, vl);
-        __riscv_vsuxei32_v_i32m2(a->num_unassigned, vclause, vn_una, vl);
+        vint32m2_t vsu = __riscv_vluxei32_v_i32m2(a->sat_una, vclause, vl);
+        vsu = __riscv_vadd_vx_i32m2(vsu, 1, vl);  // una++
+        __riscv_vsuxei32_v_i32m2(a->sat_una, vclause, vsu, vl);
     }
 }

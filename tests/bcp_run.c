@@ -79,8 +79,8 @@ static int test_run_already_unsat(void) {
     // Manually update counters to reflect this. Both clauses contain x1.
     //   C0 (x1, x2): x1 false -> num_unassigned-- only.
     //   C1 (x1):     x1 false -> num_unassigned--, becomes (0, 0).
-    a.num_unassigned[0]--;
-    a.num_unassigned[1]--;
+    a.sat_una[0]--;
+    a.sat_una[1]--;
     // C1 should now be (0, 0).
 
     enum bcp_status s = bcp_run(&f, &a, &q, &t);

@@ -13,19 +13,15 @@ void assignment_init(Assignment *a, size_t num_vars, size_t num_clauses) {
     // - helpful for interfacing with Formula
     a->lit_status     = malloc(2 * num_vars * sizeof(uint8_t));
     // allocate memory for per-clause counters
-    a->num_satisfied  = malloc(num_clauses * sizeof(int32_t));
-    a->num_unassigned = malloc(num_clauses * sizeof(int32_t));
+    a->sat_una = malloc(num_clauses * sizeof(int32_t));
 
     // check for issues with allocating memory
-    if (!a->values || !a->lit_status || !a->num_satisfied || !a->num_unassigned) {
+    if (!a->values || !a->lit_status || !a->sat_una) {
         fprintf(stderr, "assignment_init: allocation failed\n");
-        // Free anything that did get allocated before bailing.
-        free(a->values); free(a->lit_status);
-        free(a->num_satisfied); free(a->num_unassigned);
+        free(a->values); free(a->lit_status); free(a->sat_una);
         a->values = NULL;
         a->lit_status = NULL;
-        a->num_satisfied = NULL;
-        a->num_unassigned = NULL;
+        a->sat_una = NULL;
         exit(1);
     }
 
@@ -40,12 +36,10 @@ void assignment_free(Assignment *a) {
     if (!a) return;
     free(a->values);
     free(a->lit_status);
-    free(a->num_satisfied);
-    free(a->num_unassigned);
+    free(a->sat_una);
     a->values = NULL;
     a->lit_status = NULL;
-    a->num_satisfied = NULL;
-    a->num_unassigned = NULL;
+    a->sat_una = NULL;
 }
 
 void formula_free(Formula *f) {

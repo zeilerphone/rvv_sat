@@ -61,7 +61,7 @@ else
 endif
 
 # Default input for `make run` if none specified
-CNF ?= benchmarks/uf20-01.cnf
+CNF ?= benchmarks/uf20/uf20-01.cnf
 
 # Batch run configuration
 BENCH_DIR    ?= benchmarks/uf75
@@ -102,7 +102,7 @@ TEST_SRC  := $(wildcard $(TEST_DIR)/*.c)
 TEST_BIN  := $(patsubst $(TEST_DIR)/%.c,$(BUILD_DIR)/test_%,$(TEST_SRC))
 
 # Default CNF for the parse test
-TEST_PARSE_CNF ?= benchmarks/uf20-01.cnf
+TEST_PARSE_CNF ?= benchmarks/uf20/uf20-01.cnf
 
 $(BUILD_DIR)/test_%: $(TEST_DIR)/%.c $(COMMON_OBJ) $(BCP_OBJ) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)

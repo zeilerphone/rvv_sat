@@ -207,6 +207,8 @@ The different storage methods may need to be merged in the future. For now, the 
 
 A new configuration, using an XOR clause signature similar to the one used in the SAT-Accel paper, is used in the `bcp_rvv_xorsig` variant. This XORs the signature of each of the member clauses with to construct a clause signature. When a member literal becomes falsified, the 'unassigned' counter is decremented and the literal is XOR'd with the clause signature. When a clause becomes unit, this saves on iterating through the clause membership by instead leaving just the unit literal in the clause signature. 
 
+Additionally, the Assignment struct stores the number of unassigned and number of satisfied literals in each clause as one packed 32bit integer. The upper 16 bits are used to store the number of satisfied literals and the lower 16 bits are used to store the number of unassigned literals. 
+
 ## Build & test
 After setting up the prerequisites, `Makefile` contains many build and test rules for convenience. 
 

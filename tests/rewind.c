@@ -612,19 +612,19 @@ static int test_rwnd_conflict_with_partial_units(void) {
     // C0: was (0,1) → (0,0)
     // C1: was (0,2) → (0,1)
     // C3: was (0,3) → (0,2)
-    if (a.num_unassigned[0] != 0) {
+    if (clause_una(a.sat_una[0]) != 0) {
         printf("    FAIL: C0 unassigned should be 0 (conflict), got %d\n",
-               a.num_unassigned[0]);
+               clause_una(a.sat_una[0]));
         ok = 0;
     }
-    if (a.num_unassigned[1] != 1) {
+    if (clause_una(a.sat_una[1]) != 1) {
         printf("    FAIL: C1 unassigned should be 1, got %d\n",
-               a.num_unassigned[1]);
+               clause_una(a.sat_una[1]));
         ok = 0;
     }
-    if (a.num_unassigned[3] != 2) {
+    if (clause_una(a.sat_una[3]) != 2) {
         printf("    FAIL: C3 unassigned should be 2, got %d\n",
-               a.num_unassigned[3]);
+               clause_una(a.sat_una[3]));
         ok = 0;
     }
 
