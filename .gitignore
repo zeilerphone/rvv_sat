@@ -1,2 +1,5 @@
 /build/*
 pc_histogram_*
+pc_trace_*
+
+.helpers

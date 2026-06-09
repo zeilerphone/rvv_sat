@@ -76,12 +76,20 @@ int main(int argc, char **argv) {
     Assignment a;
     assignment_init(&a, f.num_vars, f.num_clauses);
 
+    uint64_t cycle0;
+    asm volatile ("rdcycle %0" : "=r"(cycle0));
+
     clock_t t0 = clock();
     enum sat_result r = solve(&f, &a);
     clock_t t1 = clock();
     clock_t diff = t1 - t0;
 
+    uint64_t cycle1;
+    asm volatile ("rdcycle %0" : "=r"(cycle1));
+
+    uint64_t cycle_diff = cycle1 - cycle0;
     fprintf(stderr, "c solve time: %lu cycles\n", diff);
+    fprintf(stderr, "c cycle count: %lu cycles\n", cycle_diff);
 
     int exit_code = 0;
     if (r == SAT) {

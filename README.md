@@ -195,6 +195,7 @@ etc.
 
 ## Contributing notes
 
+
 ## LLM attribution:
 Initial scaffolding for non-BCP files was drafted with Claude Opus 4.7 and revised by hand. The scalar and vector BCP files were written by me.
 `cnf.c`   : initial parsing script, has since been added 
