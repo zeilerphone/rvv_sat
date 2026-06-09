@@ -63,6 +63,11 @@ endif
 # Default input for `make run` if none specified
 CNF ?= benchmarks/uf20-01.cnf
 
+# Batch run configuration
+BENCH_DIR    ?= benchmarks/uf75
+RESULTS_DIR  ?= results
+RESULTS_FILE ?= $(RESULTS_DIR)/$(notdir $(BENCH_DIR)).tsv
+
 # ── Targets ───────────────────────────────────
 
 .PHONY: all
@@ -219,6 +224,59 @@ compare:
 xorsig:
 	$(MAKE) BCP=xorsig
 
+# ── Batch Comparison Run ─────────────────────────────────────────────────────
+# Run every .cnf in a benchmark subdirectory through the scalar and xorsig
+# backends and record per-problem metrics to a TSV file.
+#
+#   make batch BENCH_DIR=benchmarks/uf100
+#   make batch BENCH_DIR=benchmarks/uf75 RESULTS_FILE=results/myrun.tsv
+#   make batch-all          (iterate over all benchmarks/* subdirectories)
+#
+# TSV columns: problem  backend  result  vars  clauses  solve_instret  cycle_count
+
+.PHONY: batch
+batch:
+	$(MAKE) BCP=scalar
+	$(MAKE) BCP=xorsig
+	@mkdir -p $(RESULTS_DIR)
+	@printf '# batch run: %s  generated: %s\n' "$(BENCH_DIR)" "$$(date)" \
+	    > "$(RESULTS_FILE)"
+	@printf 'problem\tbackend\tresult\tvars\tclauses\tsolve_instret\tcycle_count\n' \
+	    >> "$(RESULTS_FILE)"
+	@n=0; \
+	for cnf in $(BENCH_DIR)/*.cnf; do \
+	    [ -f "$$cnf" ] || { echo "No .cnf files found in $(BENCH_DIR)" >&2; exit 1; }; \
+	    for backend in scalar xorsig; do \
+	        bin=$(BUILD_DIR)/rvv_dpll_$$backend; \
+	        out=$$($(SPIKE) $(SPIKEFLAGS) $(PK) "$$bin" "$$cnf" 2>&1); \
+	        result=$$(printf '%s\n' "$$out" | awk '/^s /{print $$2; exit}'); \
+	        vars=$$(printf '%s\n' "$$out" | awk '/c parsed/{print $$4; exit}'); \
+	        clauses=$$(printf '%s\n' "$$out" | awk '/c parsed/{print $$6; exit}'); \
+	        instret=$$(printf '%s\n' "$$out" | awk '/c solve instret:/{print $$4; exit}'); \
+	        cycles=$$(printf '%s\n' "$$out" | awk '/c cycle count:/{print $$4; exit}'); \
+	        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+	            "$$cnf" "$$backend" "$${result:-ERROR}" \
+	            "$${vars:-?}" "$${clauses:-?}" \
+	            "$${instret:-N/A}" "$${cycles:-N/A}" \
+	            >> "$(RESULTS_FILE)"; \
+	        n=$$((n+1)); \
+	        printf '[%4d] %-10s  %-40s  %-15s  instret=%-12s  cycles=%s\n' \
+	            "$$n" "$$backend" "$$cnf" "$${result:-ERROR}" \
+	            "$${instret:-N/A}" "$${cycles:-N/A}"; \
+	    done; \
+	done
+	@echo "Results written to $(RESULTS_FILE)"
+
+.PHONY: batch-all
+batch-all:
+	$(MAKE) BCP=scalar
+	$(MAKE) BCP=xorsig
+	@for dir in benchmarks/*/; do \
+	    [ -d "$$dir" ] || continue; \
+	    dir="$${dir%/}"; \
+	    $(MAKE) batch BENCH_DIR="$$dir"; \
+	done
+
 .PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR)
@@ -226,11 +284,16 @@ clean:
 .PHONY: help
 help:
 	@echo "Targets:"
-	@echo "  make                   - build with default BCP backend (rvv)"
-	@echo "  make BCP=scalar        - build with scalar BCP backend"
-	@echo "  make run CNF=...       - run on the given CNF file"
-	@echo "  make debug CNF=...     - run in spike interactive debugger"
-	@echo "  make test              - build and run all tests"
-	@echo "  make dis               - dump disassembly to build/rvv_dpll.dis"
-	@echo "  make check-env         - verify toolchain is set up"
-	@echo "  make clean             - remove build directory"
+	@echo "  make                          - build with default BCP backend (scalar)"
+	@echo "  make BCP=scalar               - build with scalar BCP backend"
+	@echo "  make BCP=xorsig               - build with xorsig BCP backend"
+	@echo "  make run CNF=...              - run on the given CNF file"
+	@echo "  make debug CNF=...            - run in spike interactive debugger"
+	@echo "  make compare CNF=...          - run scalar/rvv/xorsig on one CNF"
+	@echo "  make batch BENCH_DIR=...      - run all .cnf in a subdirectory,"
+	@echo "                                  write TSV to results/<dir>.tsv"
+	@echo "  make batch-all                - batch over all benchmarks/* subdirs"
+	@echo "  make test                     - build and run all tests"
+	@echo "  make dis                      - dump disassembly to build/rvv_dpll.dis"
+	@echo "  make check-env                - verify toolchain is set up"
+	@echo "  make clean                    - remove build directory"
