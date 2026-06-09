@@ -112,6 +112,7 @@ make run BCP=rvv CNF=benchmarks/uf75-01.cnf
 
 
 ## Project Structure:
+```
 rvv_sat/
 ├── Makefile
 ├── README.md
@@ -184,6 +185,7 @@ rvv_sat/
     ├── parse.c
     ├── rewind.c
     └── solve.c
+```
 
 ## Design Notes
 ### Variable/Literal representation
