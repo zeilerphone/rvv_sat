@@ -21,7 +21,7 @@ static int verify_sat(const Formula *f, const Assignment *a) {
         for (int32_t k = start; k < end; k++) {
             int32_t lit = f->lit_col[k];
             int32_t v = lit_var(lit);
-            int8_t required = lit_is_negated(lit) ? VAR_FALSE : VAR_TRUE;
+            int32_t required = lit_is_negated(lit) ? VAR_FALSE : VAR_TRUE;
             if (a->values[v] == required) { satisfied = 1; break; }
         }
         if (!satisfied) {
@@ -78,6 +78,7 @@ int main(int argc, char **argv) {
 
     uint64_t cycle0;
     asm volatile ("rdcycle %0" : "=r"(cycle0));
+    uint64_t instret0 = read_instret();
 
     clock_t t0 = clock();
     enum sat_result r = solve(&f, &a);
@@ -86,10 +87,12 @@ int main(int argc, char **argv) {
 
     uint64_t cycle1;
     asm volatile ("rdcycle %0" : "=r"(cycle1));
+    uint64_t instret1 = read_instret();
 
     uint64_t cycle_diff = cycle1 - cycle0;
     fprintf(stderr, "c solve time: %lu cycles\n", diff);
     fprintf(stderr, "c cycle count: %lu cycles\n", cycle_diff);
+    fprintf(stderr, "c solve instret: %llu\n", (unsigned long long)(instret1 - instret0));
 
     int exit_code = 0;
     if (r == SAT) {

@@ -34,12 +34,13 @@ BIN 	   := $(BUILD_DIR)/rvv_dpll_$(BCP)
 # and the BCP backends; we want both BCP files compiled but only one
 # linked into the final binary at a time.
 ALL_SRC      := $(wildcard $(SRC_DIR)/*.c)
-COMMON_SRC   := $(filter-out $(SRC_DIR)/main.c $(SRC_DIR)/bcp_scalar.c $(SRC_DIR)/bcp_rvv.c, $(ALL_SRC))
+COMMON_SRC   := $(filter-out $(SRC_DIR)/main.c $(SRC_DIR)/bcp_scalar.c $(SRC_DIR)/bcp_rvv.c $(SRC_DIR)/bcp_rvv_xorsig.c, $(ALL_SRC))
 COMMON_OBJ   := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(COMMON_SRC))
 
 MAIN_OBJ     := $(OBJ_DIR)/main.o
 SCALAR_OBJ   := $(OBJ_DIR)/bcp_scalar.o
 RVV_OBJ      := $(OBJ_DIR)/bcp_rvv.o
+XORSIG_OBJ   := $(OBJ_DIR)/bcp_rvv_xorsig.o
 
 # BCP backend selection. Both are always built; one is linked into the
 # binary based on the BCP variable. Default is RVV.
@@ -52,8 +53,11 @@ ifeq ($(BCP),scalar)
 else ifeq ($(BCP),rvv)
     BCP_OBJ := $(RVV_OBJ)
     BCP_DEF := -DBCP_RVV_DEFAULT
+else ifeq ($(BCP),xorsig)
+    BCP_OBJ := $(XORSIG_OBJ)
+    BCP_DEF := -DBCP_XORSIG_DEFAULT
 else
-    $(error BCP must be 'scalar' or 'rvv', got '$(BCP)')
+    $(error BCP must be 'scalar', 'rvv', or 'xorsig', got '$(BCP)')
 endif
 
 # Default input for `make run` if none specified
@@ -203,10 +207,17 @@ check-env:
 compare:
 	$(MAKE) BCP=scalar
 	$(MAKE) BCP=rvv
+	$(MAKE) BCP=xorsig
 	@echo "=== scalar ==="
 	$(SPIKE) $(SPIKEFLAGS) $(PK) $(BUILD_DIR)/rvv_dpll_scalar $(CNF)
 	@echo "=== rvv ==="
 	$(SPIKE) $(SPIKEFLAGS) $(PK) $(BUILD_DIR)/rvv_dpll_rvv $(CNF)
+	@echo "=== xorsig ==="
+	$(SPIKE) $(SPIKEFLAGS) $(PK) $(BUILD_DIR)/rvv_dpll_xorsig $(CNF)
+
+.PHONY: xorsig
+xorsig:
+	$(MAKE) BCP=xorsig
 
 .PHONY: clean
 clean:

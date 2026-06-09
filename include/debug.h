@@ -38,7 +38,7 @@ void preassign(Formula *f, Assignment *a, bcp_queue *q, Trail *t,
 
 // Capture full Assignment state so we can verify a rewind restored it exactly.
 typedef struct {
-    int8_t   *values;
+    int32_t  *values;
     uint8_t  *lit_status;
     int32_t  *num_satisfied;
     int32_t  *num_unassigned;

@@ -128,7 +128,7 @@ enum bcp_step_status bcp_prop_one(const Formula *f, Assignment *a, bcp_queue *q,
 }
 
 void bcp_rwnd_one(const Formula *f, Assignment *a, int32_t var){
-    int8_t val = a->values[var];
+    int32_t val = a->values[var];
     if(val == VAR_UNSET) return;
     int32_t lit = encode_lit(var);
     int32_t sat_lit = (val == VAR_TRUE) ? lit : (lit ^ 1);
