@@ -4,12 +4,112 @@
 This repo currently consists of a naive approach to parallelizing DPLL. The only component targeted to be optimized for vector instructions is the Boolean Constraint Propagation function. 
 
 ## Quick Start
-Toolchain prerequisites: 
 
-`riscv64_unknown_elf_gcc`: 
-- after ensuring you have the prerequisites, clone `https://github.com/riscv/riscv-gnu-toolchain`
-- use 
-, spike, pk, 
+### Toolchain prerequisites 
+
+On Debian/Ubuntu: 
+```bash
+sudo apt install -y \
+  build-essential git cmake autoconf automake \
+  device-tree-compiler flex bison texinfo \
+  libmpc-dev libmpfr-dev libgmp-dev python3
+```
+
+On RHEL/Rocky/AlmaLinux:
+```bash
+sudo dnf install -y \
+  gcc gcc-c++ git cmake autoconf automake \
+  dtc flex bison texinfo \
+  libmpc-devel mpfr-devel gmp-devel python3
+```
+
+No sudo? Use conda and miniforge:
+```bash
+curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh \
+  | bash -s -- -b -p $HOME/miniforge3
+source $HOME/miniforge3/bin/activate
+conda create -n riscv-build -c conda-forge \
+  cmake autoconf automake make flex bison texinfo \
+  dtc mpc mpfr gmp python
+conda activate riscv-build
+```
+
+#### Environment Variables
+
+Set these in your shell profile (`~/.bashrc` or `~/.bash_profile`) and source it before building anything:
+
+```bash
+export RISCV=$HOME/riscv          # install prefix — change to a shared path on a cluster
+export PATH=$RISCV/bin:$PATH
+```
+
+Both lines must use `export`. Without it the variables are only visible in the current shell — configure and make spawn subprocesses that won't inherit them, causing `command not found` errors even when the compiler appears to be on your PATH.
+
+### Toolchain install
+#### RISC-V GNU Toolchain (`riscv64-unknown-elf-gcc`)
+```bash
+git clone https://github.com/riscv/riscv-gnu-toolchain
+cd riscv-gnu-toolchain
+
+# Configure for bare-metal (elf) target with RVV support
+./configure \
+  --prefix=$RISCV \
+  --with-arch=rv64gcv \
+  --with-abi=lp64d
+
+# Build (this takes 20–40 min; use -j$(nproc) to parallelize)
+make -j$(nproc)
+```
+
+After this step `$RISCV/bin/riscv64-unknown-elf-gcc` should exist.
+
+#### Spike ISA simulator
+```bash
+git clone https://github.com/riscv-software-src/riscv-isa-sim.git
+cd riscv-isa-sim
+mkdir build && cd build
+
+../configure --prefix=$RISCV
+make -j$(nproc)
+make install
+```
+
+Verify: `spike --help` should print `Spike RISC-V ISA Simulator 1.1.1-dev`.
+
+#### RISC-V Proxy Kernel (`pk`)
+The proxy kernel must be cross-compiled with the toolchain you just built.
+
+```bash
+git clone https://github.com/riscv-software-src/riscv-pk.git
+cd riscv-pk
+mkdir build && cd build
+
+../configure \
+  --prefix=$RISCV \
+  --host=riscv64-unknown-elf \
+  CC=riscv64-unknown-elf-gcc
+make -j$(nproc)
+make install
+```
+
+After this step `$RISCV/riscv64-unknown-elf/bin/pk` should exist. That exact path is what the Makefile expects via `$(RISCV)/riscv64-unknown-elf/bin/pk`.
+
+### Clone and build the solver
+```bash
+git clone <repo-url>
+cd rvv_sat
+
+# Sanity-check the toolchain
+make check-env
+
+# Build scalar and RVV backends
+make BCP=scalar
+make BCP=rvv
+
+# Run on a benchmark under Spike
+make run BCP=rvv CNF=benchmarks/uf75-01.cnf
+```
+
 
 ## Project Structure:
 rvv_sat/
@@ -17,9 +117,51 @@ rvv_sat/
 ├── README.md
 ├── benchmarks
 │   ├── test.cnf
-│   ├── uf20-*.cnf
-│   ├── uf200-01.cnf
-│   └── uf75-01.cnf
+│   ├── flat50
+│   │   └── flat50-xx.cnf
+│   ├── flat100
+│   │   └── flat100-xx.cnf
+│   ├── sw100-8-0
+│   │   └── sw100-xx.cnf
+│   ├── sw100-8-2
+│   │   └── sw100-xx.cnf
+│   ├── sw100-8-4
+│   │   └── sw100-xx.cnf
+│   ├── sw100-8-6
+│   │   └── sw100-xx.cnf
+│   ├── sw100-8-8
+│   │   └── sw100-xx.cnf
+│   ├── uf20
+│   │   └── uf20-0xx.cnf
+│   ├── uf50
+│   │   └── uf50-0xx.cnf
+│   ├── uf75
+│   │   └── uf75-0xx.cnf
+│   ├── uf100
+│   │   └── uf100-0xx.cnf
+│   ├── uf125
+│   │   └── uf125-0xx.cnf
+│   ├── uf150
+│   │   └── uf150-0xx.cnf
+│   ├── uf175
+│   │   └── uf175-0xx.cnf
+│   ├── uf200
+│   │   └── uf200-0xx.cnf
+│   ├── uuf50
+│   │   └── uuf50-0xx.cnf
+│   ├── uuf75
+│   │   └── uuf75-0xx.cnf
+│   ├── uuf100
+│   │   └── uuf100-0xx.cnf
+│   ├── uuf125
+│   │   └── uuf125-0xx.cnf
+│   ├── uuf150
+│   │   └── uuf150-0xx.cnf
+│   ├── uuf175
+│   │   └── uuf175-0xx.cnf
+│   └── uuf200
+│       └── uuf200-0xx.cnf
+├── build
 ├── include
 │   ├── bcp.h
 │   ├── cnf.h
@@ -29,6 +171,7 @@ rvv_sat/
 ├── src
 │   ├── bcp_queue.c
 │   ├── bcp_rvv.c
+│   ├── bcp_rvv_xorsig.c
 │   ├── bcp_scalar.c
 │   ├── cnf.c
 │   ├── debug.c
@@ -40,8 +183,7 @@ rvv_sat/
     ├── bcp_step.c
     ├── parse.c
     ├── rewind.c
-    ├── solve.c
-    └── unit_bcp.c
+    └── solve.c
 
 ## Design Notes
 ### Variable/Literal representation
@@ -61,7 +203,7 @@ Clause membership is stored in 3 different ways. The `Formula` struct contains:
 
 The different storage methods may need to be merged in the future. For now, the sparse matrix exists for forward scalar iterations and other cases in which unequal strides are acceptable. The dense matrix exists to aid the vectorized solver by making the clause membership constant and masking out zero clauses. The transposed sparse matrix is used to find clauses containing a literal. 
 
-### 
+A new configuration, using an XOR clause signature similar to the one used in the SAT-Accel paper, is used in the `bcp_rvv_xorsig` variant. This XORs the signature of each of the member clauses with to construct a clause signature. When a member literal becomes falsified, the 'unassigned' counter is decremented and the literal is XOR'd with the clause signature. When a clause becomes unit, this saves on iterating through the clause membership by instead leaving just the unit literal in the clause signature. 
 
 ## Build & test
 After setting up the prerequisites, `Makefile` contains many build and test rules for convenience. 
