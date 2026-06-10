@@ -1,5 +1,6 @@
 // solver.c
 #include "solver.h"
+#include "perf_counters.h"
 
 #include <assert.h>
 #include <stdio.h>

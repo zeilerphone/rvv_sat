@@ -39,12 +39,6 @@ static inline size_t bcp_queue_required_capacity(const Formula *f) {
     return f->num_clauses + f->num_vars;
 }
 
-static inline uint64_t read_instret(void) {
-    uint64_t x;
-    asm volatile ("rdinstret %0" : "=r"(x));
-    return x;
-}
-
 void                 bcp_init(const Formula *f, Assignment *a);
 enum bcp_status      bcp_run(const Formula *f, Assignment *a, bcp_queue *q, Trail *t);
 enum bcp_status      bcp_drain(const Formula *f, Assignment *a, bcp_queue *q, Trail *t);

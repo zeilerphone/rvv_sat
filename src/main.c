@@ -1,4 +1,7 @@
 // main.c
+#define PERF_IMPLEMENT_GLOBALS
+#include "perf_counters.h"
+
 #include "cnf.h"
 #include "bcp.h"
 #include "trail.h"
@@ -76,8 +79,10 @@ int main(int argc, char **argv) {
     Assignment a;
     assignment_init(&a, f.num_vars, f.num_clauses);
 
-    uint64_t cycle0;
-    asm volatile ("rdcycle %0" : "=r"(cycle0));
+    if (counters_init() != 0)
+        fprintf(stderr, "c warning: perf counters unavailable, cycle/instret will be 0\n");
+
+    uint64_t cycle0   = read_cycle();
     uint64_t instret0 = read_instret();
 
     clock_t t0 = clock();
@@ -85,8 +90,7 @@ int main(int argc, char **argv) {
     clock_t t1 = clock();
     clock_t diff = t1 - t0;
 
-    uint64_t cycle1;
-    asm volatile ("rdcycle %0" : "=r"(cycle1));
+    uint64_t cycle1   = read_cycle();
     uint64_t instret1 = read_instret();
 
     uint64_t cycle_diff = cycle1 - cycle0;

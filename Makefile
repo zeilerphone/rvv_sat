@@ -10,15 +10,15 @@
 #   Clean:           make clean
 
 # Toolchain
-CC      := riscv64-unknown-elf-gcc
-OBJDUMP := riscv64-unknown-elf-objdump
+CC      := riscv64-unknown-linux-gnu-gcc
+OBJDUMP := riscv64-unknown-linux-gnu-objdump
 SPIKE   := spike
 PK      := $(RISCV)/riscv64-unknown-elf/bin/pk
 ISA     := rv64gcv
 
 # Flags
 CFLAGS  := -march=$(ISA) -mabi=lp64d -O2 -g -Wall -Wextra -static \
-           -fno-tree-vectorize -Iinclude
+           -fno-tree-vectorize -Iinclude -D_GNU_SOURCE
 LDFLAGS :=
 SPIKEFLAGS := --isa=$(ISA)_zicntr --priv=msu
 
