@@ -43,8 +43,6 @@ export RISCV=$HOME/riscv          # install prefix — change to a shared path o
 export PATH=$RISCV/bin:$PATH
 ```
 
-Both lines must use `export`. Without it the variables are only visible in the current shell — configure and make spawn subprocesses that won't inherit them, causing `command not found` errors even when the compiler appears to be on your PATH.
-
 ### Toolchain install
 #### RISC-V GNU Toolchain (`riscv64-unknown-elf-gcc`)
 ```bash
